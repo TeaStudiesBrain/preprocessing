@@ -47,7 +47,7 @@ fsl_motion_outliers \
 sleep 1;
 
 # smoothing to 6mm
-bet run"$run"_dstsvr.nii.gz run"$run"_dstsvrSS.nii.gz -F
+bet run"$run"_dstsvr.nii.gz run"$run"_dstsvrSS.nii.gz -F     #remove non-brain areas
 
 3dBlurToFWHM -prefix run"$run"_dstsvrsm6.nii.gz \
 -input run"$run"_dstsvr.nii.gz \
