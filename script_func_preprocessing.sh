@@ -57,13 +57,13 @@ bet run"$run"_dstsvr.nii.gz run"$run"_dstsvrSS.nii.gz -F     #remove non-brain a
 sleep 1;
 
 # scaling
-3dTstat -prefix run"$run"_preproc_mean_sm6.nii.gz \
-run"$run"_dstsvrsm6.nii.gz
+3dTstat -prefix run"$run"_preproc_mean_sm6.nii.gz \     #computes mean of each voxel time series
+run"$run"_dstsvrsm6.nii.gz                            
 
-3dcalc -a run"$run"_dstsvrsm6.nii.gz \
--b run"$run"_preproc_mean_sm6.nii.gz \
--expr '(a/b)*100' \
--datum float \
+3dcalc -a run"$run"_dstsvrsm6.nii.gz \                  #The original smoothed data (numerator)
+-b run"$run"_preproc_mean_sm6.nii.gz \                  #The mean intensity (denominator)
+-expr '(a/b)*100' \                                     #converts the time series into percent signal change
+-datum float \                                          #output data type is a floating-point number
 -prefix run"$run"_preproc_norm_sm6.nii.gz
 
 sleep 1;
@@ -79,12 +79,12 @@ matlab -nodesktop -r 'run_detrend; exit'
 
 for run in {1..6}
 do
-3dcopy run"$run"_sm6_detrend+orig run"$run"_sm6_detrend.nii.gz
+3dcopy run"$run"_sm6_detrend+orig run"$run"_sm6_detrend.nii.gz            #Converts the detrended functional data from AFNI format (+orig) to NIfTI format (.nii.gz)
 sleep 1
-rm -f run"$run"_sm6_detrend+orig*
+rm -f run"$run"_sm6_detrend+orig*                                         #Deletes the AFNI format files
 done
 
-3dTcat -prefix allruns_preproc_norm_sm6_SG.nii.gz \
+3dTcat -prefix allruns_preproc_norm_sm6_SG.nii.gz \                       #Concatenates all the preprocessed, detrended runs into a single 4D dataset
 run1_sm6_detrend.nii.gz \
 run2_sm6_detrend.nii.gz \
 run3_sm6_detrend.nii.gz \
@@ -94,13 +94,13 @@ run6_sm6_detrend.nii.gz
 
 
 # masking
-3dMean -prefix mask_sum.nii.gz run*_dstsvrSS_mask.nii.gz 
-3dcalc -datum byte -a mask_sum.nii.gz -prefix mask_AND.nii.gz -expr 'equals(a,1)'
+3dMean -prefix mask_sum.nii.gz run*_dstsvrSS_mask.nii.gz                                     #Creates a mean mask by averaging the brain masks from all runs
+3dcalc -datum byte -a mask_sum.nii.gz -prefix mask_AND.nii.gz -expr 'equals(a,1)'            #Creates a final intersection mask (mask_AND.nii.gz) that includes only voxels consistently present across all run. 'equals(a,1)' ensures only those voxels that are present in all masks are retained.
 
 # deconvolution
 3dDeconvolve -input allruns_preproc_norm_sm6_SG.nii.gz \
 -mask mask_AND.nii.gz \
--concat '1D: 0 268 493 813 1138 1374' \
+-concat '1D: 0 268 493 813 1138 1374' \                                                 #time where each run starts in the concatenated dataset
 -polort 0 \
 -ortvec allruns_no_interest.1D no_interest \
 -nobucket \
