@@ -1,28 +1,29 @@
 #!/bin/bash
 #fMRI preprocessing script by Giacomo Handjaras, Francesca Setti 
 
-for run in 1 2 3 4 5 6 control
+for run in 1 2 3 4 5 6 control   #bc in their experiment they have 6 runs for each participant 
 
 do
 # despike
 3dDespike \
--prefix run"$run"_ds.nii.gz \
--NEW \
-run"$run".nii.gz
+-prefix run"$run"_ds.nii.gz \    #output name
+-NEW \                           #Activates the newer despiking algorithm
+run"$run".nii.gz                 #input file 
 
 sleep 1;
 
 # time shift
 3dTshift  \
--prefix run"$run"_dsts.nii.gz \
--tpattern seq+z \
-run"$run"_ds.nii.gz
+-prefix run"$run"_dsts.nii.gz \  #output name
+-tpattern seq+z \                #seq+z means the slices were acquired sequentially (not interleaved) from bottom to top along the z-axis
+run"$run"_ds.nii.gz              #inout file (despiked from the previous step)
 
 sleep 1;
 
-if [ $run -eq 1 ]
+if [ $run -eq 1 ]                #This checks if the current run ($run) is the first run (1) It ensures that the reference volume (ref_run1.nii.gz) is only created for the first run, as all subsequent runs will use this same reference for alignment
 then
-	3dTstat -prefix ref_run1.nii.gz run1_dsts.nii.gz
+	3dTstat -prefix ref_run1.nii.gz run1_dsts.nii.gz      #An AFNI command that computes statistical summaries of a dataset along the time axis
+                                                              #creates a mean volume across all time points, which serves as the reference for motion correction 
 fi
 
 3dvolreg \
