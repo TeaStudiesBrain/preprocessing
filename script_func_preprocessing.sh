@@ -75,8 +75,7 @@ cat run1_no_interest.1D run2_no_interest.1D run3_no_interest.1D run4_no_interest
 
 # functional data of each run are detrended using a Savitzky-Golay filtering by running the matlab script "run_detrend.m"
 matlab -nodesktop -r 'run_detrend; exit'
-
-#"/mnt/c/Program Files/MATLAB/R2024b/bin/matlab" -nodesktop -r 'run_detrend; exit'
+#"/mnt/c/Program Files/MATLAB/R2024b/bin/win64/matlab.exe" -nodesktop -r run_detrend; exit"
 
 for run in {1..6}
 do
