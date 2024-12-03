@@ -80,13 +80,13 @@ sleep 1
 rm -f run_sm6_detrend+orig*
 
 
-3dTcat -prefix allruns_preproc_norm_sm6_SG.nii.gz \
-run1_sm6_detrend.nii.gz \
-run2_sm6_detrend.nii.gz \
-run3_sm6_detrend.nii.gz \
-run4_sm6_detrend.nii.gz \
-run5_sm6_detrend.nii.gz \
-run6_sm6_detrend.nii.gz
+#3dTcat -prefix allruns_preproc_norm_sm6_SG.nii.gz \
+#run1_sm6_detrend.nii.gz \
+#run2_sm6_detrend.nii.gz \
+#run3_sm6_detrend.nii.gz \
+#run4_sm6_detrend.nii.gz \
+#run5_sm6_detrend.nii.gz \
+#run6_sm6_detrend.nii.gz
 
 
 # masking
