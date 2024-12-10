@@ -1,25 +1,20 @@
 #!/bin/bash
 
-# Define paths (edit as needed)
-path_ts=$PWD/01_subjects/  # Folder containing subject time series (e.g., Movie1.nii.gz)
-path_output=$PWD/02_subjects_preproc/  # Folder to store output files
-brainmask= /home/tea.tucic/2024NatView/atlas/mni_icbm152_t1_tal_nlin_sym_09c_masked.nii.gz  # Edit this, path to your brain mask
-
-# Number of parallel jobs
-numjobs=2
+# Define paths (edit these paths)
+path_ts=$PWD/01_subjects/  # Folder containing subjects
+path_output=$PWD/02_subjects_preproc/  # Output folder
+numjobs=3  # Number of parallel jobs
 
 # Function to process a single subject
 function process_subject {
-    subj=$1
-
-    # Define paths for inputs and outputs
+    subj=$1  # Subject name or folder
     ts="${path_ts}/${subj}/Movie1.nii.gz"
     subj_dir="${path_ts}/${subj}"
     mkdir -p "${path_output}/${subj}"
 
     echo "Processing subject ${subj}..."
 
-    # Despike
+# Despike
     3dDespike \
         -prefix "${path_output}/${subj}/Movie1_ds.nii.gz" \
         -NEW \
@@ -88,7 +83,8 @@ function process_subject {
     3dcopy "${path_output}/${subj}/mask_AND.nii.gz" "${path_output}/${subj}/mask_AND"
 
     # Detrending (requires external MATLAB script)
-    matlab -nodesktop -r "cd('${subj_dir}'); run_detrend; exit"
+    matlab -nodesktop -r "cd('/home/tea.tucic/2024NatView/codes/preprocessing/'); run_detrend; exit"
+
 
     # Copy detrended data
     3dcopy "${subj_dir}/Movie1_sm6_detrend+orig" "${path_output}/${subj}/Movie1_sm6_detrend.nii.gz"
@@ -103,16 +99,17 @@ function process_subject {
         -x1D "${path_output}/${subj}/deco_clean_SG.xmat.1D" \
         -errts "${path_output}/${subj}/Movie1_cleaned_sm6_SG.nii.gz"
 
+    # Add more processing steps as needed...
     echo "Finished processing ${subj}"
 }
 
 export -f process_subject
 
-# Create output folder
+# Create output directory
 mkdir -p $path_output
 
-# List all subjects
+# Generate a list of subjects dynamically from the input directory
 subjects=($(ls -d $path_ts/* | xargs -n 1 basename))
 
-# Process subjects in parallel
+# Process all subjects in parallel
 parallel -j $numjobs process_subject ::: "${subjects[@]}"
