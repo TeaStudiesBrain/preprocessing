@@ -1,0 +1,118 @@
+#!/bin/bash
+
+# Define paths (edit as needed)
+path_ts=$PWD/01_subjects/  # Folder containing subject time series (e.g., Movie1.nii.gz)
+path_output=$PWD/02_subjects_preproc/  # Folder to store output files
+brainmask=/path/to/brainmask.nii.gz  # Edit this, path to your brain mask
+
+# Number of parallel jobs
+numjobs=7
+
+# Function to process a single subject
+function process_subject {
+    subj=$1
+
+    # Define paths for inputs and outputs
+    ts="${path_ts}/${subj}/Movie1.nii.gz"
+    subj_dir="${path_ts}/${subj}"
+    mkdir -p "${path_output}/${subj}"
+
+    echo "Processing subject ${subj}..."
+
+    # Despike
+    3dDespike \
+        -prefix "${path_output}/${subj}/Movie1_ds.nii.gz" \
+        -NEW \
+        "$ts"
+
+    # Time shift
+    3dTshift \
+        -prefix "${path_output}/${subj}/Movie1_dsts.nii.gz" \
+        -tpattern seq+z \
+        "${path_output}/${subj}/Movie1_ds.nii.gz"
+
+    # Reference mean image
+    3dTstat \
+        -prefix "${path_output}/${subj}/ref_Movie1.nii.gz" \
+        "${path_output}/${subj}/Movie1_dsts.nii.gz"
+
+    # Motion correction
+    3dvolreg \
+        -prefix "${path_output}/${subj}/Movie1_dstsvr.nii.gz" \
+        -twopass \
+        -verbose \
+        -base "${path_output}/${subj}/ref_Movie1.nii.gz" \
+        -1Dfile "${path_output}/${subj}/Movie1_motion.1D" \
+        -maxdisp1D "${path_output}/${subj}/Movie1_maxmov.1D" \
+        "${path_output}/${subj}/Movie1_dsts.nii.gz"
+
+    # Detect motion outliers
+    fsl_motion_outliers \
+        -v \
+        -i "${path_output}/${subj}/Movie1_dsts.nii.gz" \
+        -o "${path_output}/${subj}/Movie1_spikes.1D" \
+        -s "${path_output}/${subj}/Movie1_metric.txt" \
+        -p "${path_output}/${subj}/Movie1_plot.png"
+
+    # Smoothing
+    3dBlurToFWHM \
+        -prefix "${path_output}/${subj}/Movie1_dstsvrsm6.nii.gz" \
+        -input "${path_output}/${subj}/Movie1_dstsvr.nii.gz" \
+        -mask "${path_output}/${subj}/Movie1_dstsvrSS_mask.nii.gz" \
+        -FWHM 6
+
+    # Scaling
+    3dTstat \
+        -prefix "${path_output}/${subj}/Movie1_preproc_mean_sm6.nii.gz" \
+        "${path_output}/${subj}/Movie1_dstsvrsm6.nii.gz"
+
+    3dcalc \
+        -a "${path_output}/${subj}/Movie1_dstsvrsm6.nii.gz" \
+        -b "${path_output}/${subj}/Movie1_preproc_mean_sm6.nii.gz" \
+        -expr '(a/b)*100' \
+        -datum float \
+        -prefix "${path_output}/${subj}/Movie1_preproc_norm_sm6.nii.gz"
+
+    # Masking
+    3dMean \
+        -prefix "${path_output}/${subj}/mask_sum.nii.gz" \
+        "${path_output}/${subj}/Movie1_dstsvrSS_mask.nii.gz"
+    
+    3dcalc \
+        -datum byte \
+        -a "${path_output}/${subj}/mask_sum.nii.gz" \
+        -prefix "${path_output}/${subj}/mask_AND.nii.gz" \
+        -expr 'equals(a,1)'
+
+    # Convert mask to .HEAD format
+    3dcopy "${path_output}/${subj}/mask_AND.nii.gz" "${path_output}/${subj}/mask_AND"
+
+    # Detrending (requires external MATLAB script)
+    matlab -nodesktop -r "cd('${subj_dir}'); run_detrend; exit"
+
+    # Copy detrended data
+    3dcopy "${subj_dir}/Movie1_sm6_detrend+orig" "${path_output}/${subj}/Movie1_sm6_detrend.nii.gz"
+
+    # Deconvolution
+    3dDeconvolve \
+        -input "${path_output}/${subj}/Movie1_sm6_detrend.nii.gz" \
+        -mask "${path_output}/${subj}/mask_AND.nii.gz" \
+        -polort 0 \
+        -ortvec "${path_output}/${subj}/Movie1_no_interest.1D" no_interest \
+        -nobucket \
+        -x1D "${path_output}/${subj}/deco_clean_SG.xmat.1D" \
+        -errts "${path_output}/${subj}/Movie1_cleaned_sm6_SG.nii.gz"
+
+    echo "Finished processing ${subj}"
+}
+
+export -f process_subject
+
+# Create output folder
+mkdir -p $path_output
+
+# List all subjects
+subjects=($(ls -d $path_ts/* | xargs -n 1 basename))
+
+# Process subjects in parallel
+parallel -j $numjobs process_subject ::: "${subjects[@]}"
