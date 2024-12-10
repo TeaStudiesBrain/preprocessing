@@ -3,10 +3,10 @@
 # Define paths (edit as needed)
 path_ts=$PWD/01_subjects/  # Folder containing subject time series (e.g., Movie1.nii.gz)
 path_output=$PWD/02_subjects_preproc/  # Folder to store output files
-brainmask=/path/to/brainmask.nii.gz  # Edit this, path to your brain mask
+brainmask= /home/tea.tucic/2024NatView/atlas/mni_icbm152_t1_tal_nlin_sym_09c_masked.nii.gz  # Edit this, path to your brain mask
 
 # Number of parallel jobs
-numjobs=7
+numjobs=2
 
 # Function to process a single subject
 function process_subject {
