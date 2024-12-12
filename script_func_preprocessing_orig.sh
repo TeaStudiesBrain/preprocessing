@@ -1,109 +1,113 @@
 #!/bin/bash
-#fMRI preprocessing script by Giacomo Handjaras, Francesca Setti 
 
-for run in 1 2 3 4 5 6 control
+# Define paths (edit these paths)
+path_ts=$PWD/01_subjects/  # Folder containing subjects
+path_output=$PWD/02_subjects_preproc/  # Output folder
+numjobs=3  # Number of parallel jobs
 
-do
-# despike
-3dDespike \
--prefix run"$run"_ds.nii.gz \
--NEW \
-run"$run".nii.gz
+# Function to process a single subject
+function process_subject {
+    subj=$1  # Subject name or folder
+    ts="${path_ts}/${subj}/func/Movie1.nii.gz"  # Update to point to func subfolder
+    subj_dir="${path_ts}/${subj}"
+    func_output="${path_output}/${subj}/func"  # Define the output folder inside each subject's func folder
+    mkdir -p "$func_output"  # Create the func subfolder for each subject
 
-sleep 1;
+    echo "Processing subject ${subj}..."
 
-# time shift
-3dTshift  \
--prefix run"$run"_dsts.nii.gz \
--tpattern seq+z \
-run"$run"_ds.nii.gz
+    # Despike
+    3dDespike \
+        -prefix "${func_output}/Movie1_ds.nii.gz" \
+        -NEW \
+        "$ts"
 
-sleep 1;
+    # Time shift
+    3dTshift \
+        -prefix "${func_output}/Movie1_dsts.nii.gz" \
+        -tpattern seq+z \
+        "${func_output}/Movie1_ds.nii.gz"
 
-if [ $run -eq 1 ]
-then
-	3dTstat -prefix ref_run1.nii.gz run1_dsts.nii.gz
-fi
+    # Reference mean image
+    3dTstat \
+        -prefix "${func_output}/ref_Movie1.nii.gz" \
+        "${func_output}/Movie1_dsts.nii.gz"
 
-3dvolreg \
--prefix run"$run"_dstsvr.nii.gz \
--twopass \
--verbose \
--base ref_run1.nii.gz \
--1Dfile run"$run"_motion.1D \
--maxdisp1D run"$run"_maxmov.1D \
-run"$run"_dsts.nii.gz
+    # Motion correction
+    3dvolreg \
+        -prefix "${func_output}/Movie1_dstsvr.nii.gz" \
+        -twopass \
+        -verbose \
+        -base "${func_output}/ref_Movie1.nii.gz" \
+        -1Dfile "${func_output}/Movie1_motion.1D" \
+        -maxdisp1D "${func_output}/Movie1_maxmov.1D" \
+        "${func_output}/Movie1_dsts.nii.gz"
 
-sleep 1;
+    # Detect motion outliers
+    fsl_motion_outliers \
+        -v \
+        -i "${func_output}/Movie1_dsts.nii.gz" \
+        -o "${func_output}/Movie1_spikes.1D" \
+        -s "${func_output}/Movie1_metric.txt" \
+        -p "${func_output}/Movie1_plot.png"
 
-fsl_motion_outliers \
--v \
--i run"$run"_dsts.nii.gz \
--o run"$run"_spikes.1D \
--s run"$run"_metric.txt \
--p run"$run"_plot.png \
+    # Smoothing
+    3dBlurToFWHM \
+        -prefix "${func_output}/Movie1_dstsvrsm6.nii.gz" \
+        -input "${func_output}/Movie1_dstsvr.nii.gz" \
+        -mask "${func_output}/Movie1_dstsvrSS_mask.nii.gz" \
+        -FWHM 6
 
-sleep 1;
+    # Scaling
+    3dTstat \
+        -prefix "${func_output}/Movie1_preproc_mean_sm6.nii.gz" \
+        "${func_output}/Movie1_dstsvrsm6.nii.gz"
 
-# smoothing to 6mm
-bet run"$run"_dstsvr.nii.gz run"$run"_dstsvrSS.nii.gz -F
+    3dcalc \
+        -a "${func_output}/Movie1_dstsvrsm6.nii.gz" \
+        -b "${func_output}/Movie1_preproc_mean_sm6.nii.gz" \
+        -expr '(a/b)*100' \
+        -datum float \
+        -prefix "${func_output}/Movie1_preproc_norm_sm6.nii.gz"
 
-3dBlurToFWHM -prefix run"$run"_dstsvrsm6.nii.gz \
--input run"$run"_dstsvr.nii.gz \
--mask run"$run"_dstsvrSS_mask.nii.gz \
--FWHM 6 
+    # Masking
+    3dMean \
+        -prefix "${func_output}/mask_sum.nii.gz" \
+        "${func_output}/Movie1_dstsvrSS_mask.nii.gz"
+    
+    3dcalc \
+        -datum byte \
+        -a "${func_output}/mask_sum.nii.gz" \
+        -prefix "${func_output}/mask_AND.nii.gz" \
+        -expr 'equals(a,1)'
 
-sleep 1;
+    # Convert mask to .HEAD format
+    3dcopy "${func_output}/mask_AND.nii.gz" "${func_output}/mask_AND"
 
-# scaling
-3dTstat -prefix run"$run"_preproc_mean_sm6.nii.gz \
-run"$run"_dstsvrsm6.nii.gz
+    # Detrending (requires external MATLAB script)
+    matlab -nodesktop -r "cd('/home/tea.tucic/2024NatView/codes/preprocessing'); run_detrend; exit"
 
-3dcalc -a run"$run"_dstsvrsm6.nii.gz \
--b run"$run"_preproc_mean_sm6.nii.gz \
--expr '(a/b)*100' \
--datum float \
--prefix run"$run"_preproc_norm_sm6.nii.gz
+    # Copy detrended data
+    3dcopy "${subj_dir}/func/Movie1_sm6_detrend+orig" "${func_output}/Movie1_sm6_detrend.nii.gz"
 
-sleep 1;
+    # Deconvolution
+    3dDeconvolve \
+        -input "${func_output}/Movie1_sm6_detrend.nii.gz" \
+        -mask "${func_output}/mask_AND.nii.gz" \
+        -polort 0 \
+        -ortvec "${func_output}/Movie1_no_interest.1D" no_interest \
+        -nobucket \
+        -x1D "${func_output}/deco_clean_SG.xmat.1D" \
+        -errts "${func_output}/Movie1_cleaned_sm6_SG.nii.gz"
 
-paste run"$run"_motion.1D run"$run"_metric.txt > run"$run"_no_interest.1D
+    echo "Finished processing ${subj}"
+}
+export -f process_subject
 
-done
+# Create the output directory for each subject
+mkdir -p $path_output
 
-cat run1_no_interest.1D run2_no_interest.1D run3_no_interest.1D run4_no_interest.1D run5_no_interest.1D run6_no_interest.1D > allruns_no_interest.1D
+# Generate a list of subjects dynamically from the input directory
+subjects=($(ls -d $path_ts/* | xargs -n 1 basename))
 
-# functional data of each run are detrended using a Savitzky-Golay filtering by running the matlab script "run_detrend.m"
-matlab -nodesktop -r 'run_detrend; exit'
-
-for run in {1..6}
-do
-3dcopy run"$run"_sm6_detrend+orig run"$run"_sm6_detrend.nii.gz
-sleep 1
-rm -f run"$run"_sm6_detrend+orig*
-done
-
-3dTcat -prefix allruns_preproc_norm_sm6_SG.nii.gz \
-run1_sm6_detrend.nii.gz \
-run2_sm6_detrend.nii.gz \
-run3_sm6_detrend.nii.gz \
-run4_sm6_detrend.nii.gz \
-run5_sm6_detrend.nii.gz \
-run6_sm6_detrend.nii.gz
-
-
-# masking
-3dMean -prefix mask_sum.nii.gz run*_dstsvrSS_mask.nii.gz 
-3dcalc -datum byte -a mask_sum.nii.gz -prefix mask_AND.nii.gz -expr 'equals(a,1)'
-
-# deconvolution
-3dDeconvolve -input allruns_preproc_norm_sm6_SG.nii.gz \
--mask mask_AND.nii.gz \
--concat '1D: 0 268 493 813 1138 1374' \
--polort 0 \
--ortvec allruns_no_interest.1D no_interest \
--nobucket \
--x1D deco_clean_SG.xmat.1D \
--errts allruns_cleaned_sm6_SG.nii.gz 
-
-exit 0;
+# Process all subjects in parallel
+parallel -j $numjobs process_subject ::: "${subjects[@]}"
