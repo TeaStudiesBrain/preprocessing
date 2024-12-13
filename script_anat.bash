@@ -76,6 +76,8 @@ function process_subject {
         -prefix "subjects_preproc/${subj_name}/anat/Movie1_cleaned_sm6_SG_MNInlin.nii.gz"
 }
 
+#export -f process_subject  # Export the function for parallel execution
+
 # Find all fMRI files in the func subfolders of each subject
 find "$path_subject" -type f -name "*.nii.gz" | grep "/func/" > fmrilist.txt
 
@@ -84,5 +86,6 @@ while IFS= read -r fmri; do
     process_subject "$fmri"
 done < fmrilist.txt
 
-
+# Run preprocessing in parallel for each subject's fMRI data
+#parallel -j "$numjobs" process_subject {} < fmrilist.txt
 
