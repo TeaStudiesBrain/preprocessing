@@ -44,35 +44,45 @@ function process_subject {
 #exit 0;
 
 
-### comandi per warp serie temporali di ogni tipo
+        ### comandi per warp serie temporali di ogni tipo
+        
+        # warp MNI della maschera come sanity check
+        3dNwarpApply \
+        -nwarp "subjects_preproc/${subj_name}/anat/T1w_ICBM_nlin_WARP+tlrc." \
+        -master /MNI152_mask_3mm.nii.gz \
+        -interp NN \
+        -source "subjects_preproc/${subj_name}/func/mask_AND.nii.gz" \
+        -prefix "subjects_preproc/${subj_name}/anat/mask_AND_MNInlin.nii.gz"
+        
+        #sleep 3;
+        
+        
+        # warp MNI dei dati con smoothing 6mm
+        3dNwarpApply \
+        -nwarp "subjects_preproc/${subj_name}/anat/T1w_ICBM_nlin_WARP+tlrc." \
+        -master /MNI152_mask_3mm.nii.gz \
+        -source "subjects_preproc/${subj_name}/func/Movie1_cleaned_sm6.nii.gz" \ #name has to be changed 
+        -prefix "subjects_preproc/${subj_name}/anat/Movie1_cleaned_sm6_MNInlin.nii.gz"
+        
+        #sleep 3;
+        
+        
+        
+        # savitzky
+        3dNwarpApply \
+        -nwarp "subjects_preproc/${subj_name}/anat/mprage_ICBM_nlin_WARP+tlrc". \
+        -master /MNI152_mask_3mm.nii.gz \
+        -source "subjects_preproc/${subj_name}/func/Movie1_cleaned_sm6_SG.nii.gz" \
+        -prefix "subjects_preproc/${subj_name}/anat/Movie1_cleaned_sm6_SG_MNInlin.nii.gz"
+}
 
-# warp MNI della maschera come sanity check
-3dNwarpApply \
--nwarp "subjects_preproc/${subj_name}/anat/T1w_ICBM_nlin_WARP+tlrc." \
--master /MNI152_mask_3mm.nii.gz \
--interp NN \
--source "subjects_preproc/${subj_name}/func/mask_AND.nii.gz" \
--prefix "subjects_preproc/${subj_name}/anat/mask_AND_MNInlin.nii.gz"
+# Find all fMRI files in the func subfolders of each subject
+find "$path_subject" -type f -name "*.nii.gz" | grep "/func/" > fmrilist.txt
 
-sleep 3;
+# Process each subject sequentially
+while IFS= read -r fmri; do
+    process_subject "$fmri"
+done < fmrilist.txt
 
-
-# warp MNI dei dati con smoothing 6mm
-3dNwarpApply \
--nwarp "subjects_preproc/${subj_name}/anat/T1w_ICBM_nlin_WARP+tlrc." \
--master /MNI152_mask_3mm.nii.gz \
--source "subjects_preproc/${subj_name}/func/Movie1_cleaned_sm6.nii.gz" \ #name has to be changed 
--prefix "subjects_preproc/${subj_name}/anat/Movie1_cleaned_sm6_MNInlin.nii.gz"
-
-sleep 3;
-
-
-
-# savitzky
-3dNwarpApply \
--nwarp "subjects_preproc/${subj_name}/anat/mprage_ICBM_nlin_WARP+tlrc". \
--master /MNI152_mask_3mm.nii.gz \
--source "subjects_preproc/${subj_name}/func/Movie1_cleaned_sm6_SG.nii.gz" \
--prefix "subjects_preproc/${subj_name}/anat/Movie1_cleaned_sm6_SG_MNInlin.nii.gz"
 
 
